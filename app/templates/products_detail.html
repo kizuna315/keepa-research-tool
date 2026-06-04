@@ -1,0 +1,192 @@
+﻿{% extends "base.html" %}
+
+{% block title %}商品詳細 | Keepa Research Tool{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">商品詳細</h1>
+    <p class="page-subtitle">ASIN、ブランド、判定、ステータスなどを確認できます。</p>
+  </div>
+  <div class="page-actions">
+    <a href="{{ url_for('products.list_products') }}" class="btn btn-outline-primary">商品一覧へ戻る</a>
+    {% if product.amazon_url %}
+      <a href="{{ product.amazon_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary">Amazonで開く</a>
+    {% endif %}
+    {% if product.keepa_url %}
+      <a href="{{ product.keepa_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary">Keepaで開く</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="detail-hero app-card mb-4">
+  <div class="app-card-body">
+    <div class="detail-hero-grid">
+      <div class="product-image-box">
+        {% if product.image_url %}
+          <img src="{{ product.image_url }}" alt="product image">
+        {% else %}
+          <span>画像なし</span>
+        {% endif %}
+      </div>
+      <div>
+        <h2 class="detail-product-title">{{ product.title or "-" }}</h2>
+        <div class="detail-meta-grid">
+          <div><span>ASIN</span>{{ product.asin or "-" }}</div>
+          <div><span>JAN / EAN</span>{{ product.jan or "-" }} / {{ product.ean or "-" }}</div>
+          <div><span>ブランド</span>{{ product.brand or "-" }}</div>
+          <div><span>メーカー</span>{{ product.manufacturer or "-" }}</div>
+          <div><span>カテゴリーID</span>{{ product.category_id or "-" }}</div>
+          <div><span>カテゴリー名</span>{{ product.category_name or "-" }}</div>
+        </div>
+        <div class="link-actions mt-3">
+          {% if product.amazon_url %}
+            <a href="{{ product.amazon_url }}" target="_blank" rel="noopener noreferrer">Amazon商品ページリンク</a>
+          {% else %}
+            <span class="text-muted">Amazon商品ページリンク: -</span>
+          {% endif %}
+          {% if product.keepa_url %}
+            <a href="{{ product.keepa_url }}" target="_blank" rel="noopener noreferrer">Keepa商品ページリンク</a>
+          {% else %}
+            <span class="text-muted">Keepa商品ページリンク: -</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="score-summary">
+        <div class="metric-label">Keepaスコア</div>
+        {% if product.keepa_score is not none %}
+          <div class="score-pill score-pill-large">{{ product.keepa_score }}</div>
+        {% else %}
+          <div class="score-pill score-pill-large">-</div>
+        {% endif %}
+        <div class="mt-3">
+          <div class="metric-label">判定</div>
+          {% set judgement_class = "secondary" %}
+          {% if product.judgement == "good" %}
+            {% set judgement_class = "success" %}
+          {% elif product.judgement == "watch" %}
+            {% set judgement_class = "warning text-dark" %}
+          {% elif product.judgement == "bad" %}
+            {% set judgement_class = "danger" %}
+          {% endif %}
+          <span class="badge badge-soft bg-{{ judgement_class }}">{{ product.judgement or "-" }}</span>
+        </div>
+        <div class="mt-3">
+          <div class="metric-label">ステータス</div>
+          {% set status_class = "secondary" %}
+          {% if product.status == "candidate" %}
+            {% set status_class = "success" %}
+          {% elif product.status == "hold" %}
+            {% set status_class = "warning text-dark" %}
+          {% elif product.status == "excluded" %}
+            {% set status_class = "danger" %}
+          {% elif product.status == "supplier_search_pending" %}
+            {% set status_class = "info text-dark" %}
+          {% endif %}
+          <span class="badge badge-soft bg-{{ status_class }}">{{ product.status or "-" }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="metric-grid mb-4">
+  <div class="metric-card">
+    <h3>価格情報</h3>
+    <dl>
+      <dt>現在価格</dt><dd>{{ product.current_price if product.current_price is not none else "-" }}</dd>
+      <dt>30日平均価格</dt><dd>{{ product.avg_price_30 if product.avg_price_30 is not none else "-" }}</dd>
+      <dt>90日平均価格</dt><dd>{{ product.avg_price_90 if product.avg_price_90 is not none else "-" }}</dd>
+      <dt>90日最安値</dt><dd>{{ product.lowest_price_90 if product.lowest_price_90 is not none else "-" }}</dd>
+      <dt>90日最高値</dt><dd>{{ product.highest_price_90 if product.highest_price_90 is not none else "-" }}</dd>
+    </dl>
+  </div>
+
+  <div class="metric-card">
+    <h3>ランキング情報</h3>
+    <dl>
+      <dt>現在ランキング</dt><dd>{{ product.sales_rank_current if product.sales_rank_current is not none else "-" }}</dd>
+      <dt>30日平均ランキング</dt><dd>{{ product.sales_rank_avg_30 if product.sales_rank_avg_30 is not none else "-" }}</dd>
+      <dt>90日平均ランキング</dt><dd>{{ product.sales_rank_avg_90 if product.sales_rank_avg_90 is not none else "-" }}</dd>
+      <dt>30日ランキング変動</dt><dd>{{ product.sales_rank_drops_30 if product.sales_rank_drops_30 is not none else "-" }}</dd>
+      <dt>90日ランキング変動</dt><dd>{{ product.sales_rank_drops_90 if product.sales_rank_drops_90 is not none else "-" }}</dd>
+    </dl>
+  </div>
+
+  <div class="metric-card">
+    <h3>出品者・在庫</h3>
+    <dl>
+      <dt>新品出品者数</dt><dd>{{ product.new_offer_count if product.new_offer_count is not none else "-" }}</dd>
+      <dt>中古出品者数</dt><dd>{{ product.used_offer_count if product.used_offer_count is not none else "-" }}</dd>
+      <dt>FBA出品者数</dt><dd>{{ product.fba_offer_count if product.fba_offer_count is not none else "-" }}</dd>
+      <dt>Amazon本体の有無</dt>
+      <dd>{% if product.amazon_in_stock is true %}あり{% elif product.amazon_in_stock is false %}なし{% else %}-{% endif %}</dd>
+      <dt>90日Amazon本体在庫</dt>
+      <dd>{% if product.amazon_was_in_stock_90 is true %}あり{% elif product.amazon_was_in_stock_90 is false %}なし{% else %}-{% endif %}</dd>
+    </dl>
+  </div>
+
+  <div class="metric-card">
+    <h3>レビュー・スコア</h3>
+    <dl>
+      <dt>レビュー数</dt><dd>{{ product.review_count if product.review_count is not none else "-" }}</dd>
+      <dt>評価</dt><dd>{{ product.rating if product.rating is not none else "-" }}</dd>
+      <dt>売れ行きスコア</dt><dd>{{ product.sales_score if product.sales_score is not none else "-" }}</dd>
+      <dt>価格安定スコア</dt><dd>{{ product.price_stability_score if product.price_stability_score is not none else "-" }}</dd>
+      <dt>競合スコア</dt><dd>{{ product.competition_score if product.competition_score is not none else "-" }}</dd>
+      <dt>リスクスコア</dt><dd>{{ product.risk_score if product.risk_score is not none else "-" }}</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="detail-grid mb-4">
+  <div class="app-card">
+    <div class="app-card-header">判定理由</div>
+    <div class="app-card-body">
+      {% if judgement_reasons %}
+        <ul class="reason-list mb-0">
+          {% for reason in judgement_reasons %}
+            <li>{{ reason }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="empty-state small-empty-state">判定理由はまだありません。</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="app-card form-section">
+    <div class="app-card-header">ステータス・メモ編集</div>
+    <div class="app-card-body">
+      <form method="post" action="{{ url_for('products.update_product', product_id=product.id) }}">
+        <div class="mb-3">
+          <label for="status" class="form-label">ステータス</label>
+          <select id="status" name="status" class="form-select">
+            <option value="unreviewed" {% if product.status == "unreviewed" %}selected{% endif %}>未確認</option>
+            <option value="candidate" {% if product.status == "candidate" %}selected{% endif %}>候補</option>
+            <option value="hold" {% if product.status == "hold" %}selected{% endif %}>保留</option>
+            <option value="excluded" {% if product.status == "excluded" %}selected{% endif %}>除外</option>
+            <option value="supplier_search_pending" {% if product.status == "supplier_search_pending" %}selected{% endif %}>仕入れ先検索待ち</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label for="memo" class="form-label">メモ</label>
+          <textarea id="memo" name="memo" rows="5" class="form-control">{{ product.memo or "" }}</textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">保存</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="app-card mb-3">
+  <div class="app-card-header">補足情報</div>
+  <div class="app-card-body detail-meta-grid">
+    <div><span>メモ</span>{{ product.memo or "-" }}</div>
+    <div><span>初回取得（JST）</span>{{ product.first_seen_at|datetime_jst }}</div>
+    <div><span>最終確認（JST）</span>{{ product.last_checked_at|datetime_jst }}</div>
+  </div>
+</div>
+
+<a href="{{ url_for('products.list_products') }}">商品一覧へ戻る</a>
+{% endblock %}

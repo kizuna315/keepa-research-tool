@@ -1,0 +1,248 @@
+﻿{% extends "base.html" %}
+
+{% block title %}新規リサーチ | Keepa Research Tool{% endblock %}
+
+{% block content %}
+{% set kv = keyword_values or {} %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">新規リサーチ</h1>
+    <p class="page-subtitle">ASINまたはキーワードで商品候補を取得します。</p>
+  </div>
+  <div class="page-actions">
+    <a href="{{ url_for('products.list_products') }}" class="btn btn-outline-primary">商品一覧</a>
+  </div>
+</div>
+
+<div class="research-help app-card mb-4">
+  <div class="app-card-body">
+    <div class="help-grid">
+      <div>
+        <div class="help-title">ASIN指定</div>
+        <p class="help-text mb-0">手元にASINがある場合はこちら。改行またはカンマ区切りで複数入力できます。</p>
+      </div>
+      <div>
+        <div class="help-title">キーワード検索</div>
+        <p class="help-text mb-0">条件を指定してKeepaから候補を探す場合はこちら。取得上限はトークン消費に影響します。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="research-form-grid mb-4">
+  <div class="app-card form-section">
+    <div class="app-card-header">ASIN指定リサーチ</div>
+    <div class="app-card-body">
+      <p class="help-text">ASINを改行またはカンマ区切りで入力して、ASIN指定リサーチを実行します。</p>
+      <form method="post" action="{{ url_for('research.new_research') }}">
+        <input type="hidden" name="research_type" value="asin">
+        <div class="mb-3">
+          <label for="asin_name" class="form-label">リサーチ名</label>
+          <input
+            id="asin_name"
+            name="name"
+            type="text"
+            class="form-control"
+            value="{{ name or '' }}"
+            placeholder="例: 2026-05-26 ASINリサーチ"
+          >
+        </div>
+
+        <div class="mb-3">
+          <label for="asin_text" class="form-label">ASIN入力</label>
+          <textarea
+            id="asin_text"
+            name="asin_text"
+            rows="8"
+            class="form-control"
+            placeholder="B0ABC11111&#10;B0DEF22222, B0GHI33333"
+          >{{ asin_text or "" }}</textarea>
+        </div>
+
+        <div class="alert alert-secondary small" role="alert">
+          <div class="fw-semibold mb-1">入力例</div>
+          <code>B0ABC11111</code><br>
+          <code>B0DEF22222, B0GHI33333</code>
+        </div>
+
+        <button type="submit" class="btn btn-primary">ASINリサーチ実行</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="app-card form-section">
+    <div class="app-card-header">キーワード検索リサーチ</div>
+    <div class="app-card-body">
+      <p class="help-text">キーワードと条件を指定して、Keepa APIのキーワード検索リサーチを実行します。</p>
+      {% set token_guidance = keyword_token_guidance or {} %}
+      <div class="alert alert-info small" role="alert">
+        <div class="fw-semibold mb-1">キーワード検索のトークン目安</div>
+        {% if token_guidance.get('available') %}
+          <div>現在使えるトークン: {{ token_guidance.get('tokens_available') }}</div>
+          <div>推奨取得上限: {{ token_guidance.get('recommended_limit') }}件程度</div>
+          <div>取得上限5件の目安: 約{{ token_guidance.get('estimated_for_limit_5') }}トークン</div>
+          <div>{{ token_guidance.get('message') }}</div>
+        {% else %}
+          <div>{{ token_guidance.get('message', 'トークン状態を取得できませんでした。キーワード検索は少数件で実行してください。') }}</div>
+        {% endif %}
+        <div class="mt-1">キーワード検索は検索後に各ASINの詳細データを再取得するため、ASIN指定より多くのトークンを消費します。</div>
+      </div>
+      <form method="post" action="{{ url_for('research.new_research') }}">
+        <input type="hidden" name="research_type" value="keyword">
+
+        <div class="mb-3">
+          <label class="form-label d-block">取得モード</label>
+          <div class="form-check">
+            <input
+              id="fetch_mode_light"
+              name="fetch_mode"
+              type="radio"
+              class="form-check-input"
+              value="light"
+              {% if kv.get('fetch_mode', 'light') != 'detail' %}checked{% endif %}
+            >
+            <label for="fetch_mode_light" class="form-check-label">軽量モード（おすすめ・トークン節約）</label>
+            <div class="form-text">/search後にASIN詳細を軽く取得します。出品者詳細までは深追いしません。</div>
+          </div>
+          <div class="form-check mt-2">
+            <input
+              id="fetch_mode_detail"
+              name="fetch_mode"
+              type="radio"
+              class="form-check-input"
+              value="detail"
+              {% if kv.get('fetch_mode') == 'detail' %}checked{% endif %}
+            >
+            <label for="fetch_mode_detail" class="form-check-label">詳細モード（出品者情報まで取得・トークン消費大）</label>
+            <div class="form-text">従来どおり offers=20 付きで詳細取得します。FBAや出品者情報を重視する場合に使います。</div>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-12 col-md-6">
+            <label for="keyword_name" class="form-label">リサーチ名</label>
+            <input id="keyword_name" name="name" type="text" class="form-control" value="{{ kv.get('name', '') }}" placeholder="例: 水筒 キーワード検索">
+          </div>
+          <div class="col-12 col-md-6">
+            <label for="keyword" class="form-label">キーワード <span class="text-danger">*</span></label>
+            <input id="keyword" name="keyword" type="text" class="form-control" value="{{ kv.get('keyword', '') }}" placeholder="例: 水筒">
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label for="category_id" class="form-label">カテゴリーID</label>
+            <input id="category_id" name="category_id" type="text" class="form-control" value="{{ kv.get('category_id', '') }}">
+          </div>
+          <div class="col-6 col-md-4">
+            <label for="min_price" class="form-label">最低Amazon価格</label>
+            <input id="min_price" name="min_price" type="number" class="form-control" value="{{ kv.get('min_price', '1500') }}">
+          </div>
+          <div class="col-6 col-md-4">
+            <label for="max_price" class="form-label">最高Amazon価格</label>
+            <input id="max_price" name="max_price" type="number" class="form-control" value="{{ kv.get('max_price', '10000') }}">
+          </div>
+
+          <div class="col-6 col-md-3">
+            <label for="min_review_count" class="form-label">最低レビュー数</label>
+            <input id="min_review_count" name="min_review_count" type="number" class="form-control" value="{{ kv.get('min_review_count', '10') }}">
+          </div>
+          <div class="col-6 col-md-3">
+            <label for="max_review_count" class="form-label">最大レビュー数</label>
+            <input id="max_review_count" name="max_review_count" type="number" class="form-control" value="{{ kv.get('max_review_count', '99999') }}">
+          </div>
+          <div class="col-6 col-md-3">
+            <label for="min_offer_count" class="form-label">新品出品者数 最小</label>
+            <input id="min_offer_count" name="min_offer_count" type="number" class="form-control" value="{{ kv.get('min_offer_count', '3') }}">
+          </div>
+          <div class="col-6 col-md-3">
+            <label for="max_offer_count" class="form-label">新品出品者数 最大</label>
+            <input id="max_offer_count" name="max_offer_count" type="number" class="form-control" value="{{ kv.get('max_offer_count', '15') }}">
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label for="min_sales_rank_drops_90" class="form-label">ランキング変動回数の最低条件</label>
+            <input id="min_sales_rank_drops_90" name="min_sales_rank_drops_90" type="number" class="form-control" value="{{ kv.get('min_sales_rank_drops_90', '10') }}">
+          </div>
+          <div class="col-12 col-md-6">
+            <label for="limit" class="form-label">取得上限件数</label>
+            <input id="limit" name="limit" type="number" class="form-control" value="{{ kv.get('limit', '100') }}" min="1" max="100">
+          </div>
+
+          <div class="col-12">
+            <div class="form-check form-switch">
+              <input
+                id="exclude_amazon_in_stock"
+                name="exclude_amazon_in_stock"
+                type="checkbox"
+                class="form-check-input"
+                value="true"
+                {% if kv.get('exclude_amazon_in_stock', 'true') in ['true', 'on', '1', true] %}checked{% endif %}
+              >
+              <label for="exclude_amazon_in_stock" class="form-check-label">Amazon本体あり商品を除外</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <button type="submit" class="btn btn-outline-primary">キーワードリサーチ開始</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<section class="app-card table-card">
+  <div class="app-card-header">直近のリサーチ履歴</div>
+  <div class="app-card-body">
+    {% if recent_runs %}
+      <div class="table-responsive">
+        <table class="table table-sm align-middle app-table compact-table">
+          <thead>
+            <tr>
+              <th>リサーチ名</th>
+              <th>ステータス</th>
+              <th>要求件数</th>
+              <th>取得件数</th>
+              <th>保存件数</th>
+              <th>開始日時（JST）</th>
+              <th>終了日時（JST）</th>
+              <th>エラー内容</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for run in recent_runs %}
+              <tr>
+                <td>{{ run.name or "-" }}</td>
+                <td>
+                  {% set badge_class = "secondary" %}
+                  {% if run.status == "completed" %}
+                    {% set badge_class = "success" %}
+                  {% elif run.status == "failed" %}
+                    {% set badge_class = "danger" %}
+                  {% elif run.status == "running" %}
+                    {% set badge_class = "warning text-dark" %}
+                  {% endif %}
+                  <span class="badge badge-soft bg-{{ badge_class }}">{{ run.status }}</span>
+                </td>
+                <td>{{ run.total_requested }}</td>
+                <td>{{ run.total_fetched }}</td>
+                <td>{{ run.total_saved }}</td>
+                <td>{{ run.started_at|datetime_jst }}</td>
+                <td>{{ run.finished_at|datetime_jst }}</td>
+                <td>
+                  {% if run.error_message %}
+                    <span class="text-danger">{{ run.error_message }}</span>
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty-state small-empty-state">まだリサーチ履歴はありません。</div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

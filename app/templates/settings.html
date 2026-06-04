@@ -1,0 +1,117 @@
+﻿{% extends "base.html" %}
+
+{% block title %}設定 | Keepa Research Tool{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">設定</h1>
+    <p class="page-subtitle">Keepa API Keyとデフォルト検索条件を管理します。</p>
+  </div>
+  <div class="page-actions">
+    <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline-primary">ダッシュボード</a>
+  </div>
+</div>
+
+<div class="alert alert-secondary" role="alert">
+  {% if has_keepa_api_key %}
+    API Keyは保存済みです。
+  {% else %}
+    API Keyは未設定です。
+  {% endif %}
+</div>
+
+<form method="post" action="{{ url_for('settings.save_settings') }}" class="settings-form">
+  <div class="app-card form-section mb-4">
+    <div class="app-card-header">Keepa API設定</div>
+    <div class="app-card-body">
+      <div class="row g-3">
+        <div class="col-12">
+          <label for="keepa_api_key" class="form-label">Keepa API Key</label>
+          <input
+            type="password"
+            class="form-control"
+            id="keepa_api_key"
+            name="keepa_api_key"
+            placeholder="{% if has_keepa_api_key %}保存済み（変更する場合のみ入力）{% else %}未設定{% endif %}"
+            autocomplete="new-password"
+          >
+          <div class="help-text mt-2">保存済みのAPI Key実値は画面に表示しません。変更する場合だけ入力してください。</div>
+        </div>
+
+        <div class="col-md-6">
+          <label for="default_domain_id" class="form-label">デフォルトAmazonドメイン</label>
+          <input type="text" class="form-control{% if errors.get('default_domain_id') %} is-invalid{% endif %}" id="default_domain_id" name="default_domain_id" value="{{ settings.get('default_domain_id', '') or '' }}">
+          {% if errors.get('default_domain_id') %}<div class="invalid-feedback d-block">{{ errors.get('default_domain_id') }}</div>{% endif %}
+          <div class="help-text mt-2">Amazon.co.jp は通常 domainId 5 です。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-card form-section mb-4">
+    <div class="app-card-header">デフォルトリサーチ条件</div>
+    <div class="app-card-body">
+      <div class="form-grid">
+        <div>
+          <label for="default_min_sales_rank_drops_90" class="form-label">ランキング変動回数の最低条件</label>
+          <input type="text" class="form-control{% if errors.get('default_min_sales_rank_drops_90') %} is-invalid{% endif %}" id="default_min_sales_rank_drops_90" name="default_min_sales_rank_drops_90" value="{{ settings.get('default_min_sales_rank_drops_90', '') or '' }}">
+          {% if errors.get('default_min_sales_rank_drops_90') %}<div class="invalid-feedback d-block">{{ errors.get('default_min_sales_rank_drops_90') }}</div>{% endif %}
+        </div>
+
+        <div>
+          <label for="default_min_price" class="form-label">デフォルト価格下限</label>
+          <input type="text" class="form-control{% if errors.get('default_min_price') %} is-invalid{% endif %}" id="default_min_price" name="default_min_price" value="{{ settings.get('default_min_price', '') or '' }}">
+          {% if errors.get('default_min_price') %}<div class="invalid-feedback d-block">{{ errors.get('default_min_price') }}</div>{% endif %}
+        </div>
+
+        <div>
+          <label for="default_max_price" class="form-label">デフォルト価格上限</label>
+          <input type="text" class="form-control{% if errors.get('default_max_price') %} is-invalid{% endif %}" id="default_max_price" name="default_max_price" value="{{ settings.get('default_max_price', '') or '' }}">
+          {% if errors.get('default_max_price') %}<div class="invalid-feedback d-block">{{ errors.get('default_max_price') }}</div>{% endif %}
+        </div>
+
+        <div>
+          <label for="default_min_offer_count" class="form-label">デフォルト出品者数下限</label>
+          <input type="text" class="form-control{% if errors.get('default_min_offer_count') %} is-invalid{% endif %}" id="default_min_offer_count" name="default_min_offer_count" value="{{ settings.get('default_min_offer_count', '') or '' }}">
+          {% if errors.get('default_min_offer_count') %}<div class="invalid-feedback d-block">{{ errors.get('default_min_offer_count') }}</div>{% endif %}
+        </div>
+
+        <div>
+          <label for="default_max_offer_count" class="form-label">デフォルト出品者数上限</label>
+          <input type="text" class="form-control{% if errors.get('default_max_offer_count') %} is-invalid{% endif %}" id="default_max_offer_count" name="default_max_offer_count" value="{{ settings.get('default_max_offer_count', '') or '' }}">
+          {% if errors.get('default_max_offer_count') %}<div class="invalid-feedback d-block">{{ errors.get('default_max_offer_count') }}</div>{% endif %}
+        </div>
+
+        <div class="form-check-panel">
+          <div class="form-check form-switch">
+            <input
+              class="form-check-input{% if errors.get('exclude_amazon_in_stock') %} is-invalid{% endif %}"
+              type="checkbox"
+              value="on"
+              id="exclude_amazon_in_stock"
+              name="exclude_amazon_in_stock"
+              {% if settings.get('exclude_amazon_in_stock') == 'true' %}checked{% endif %}
+            >
+            <label class="form-check-label" for="exclude_amazon_in_stock">Amazon本体あり商品の扱い（除外する）</label>
+            {% if errors.get('exclude_amazon_in_stock') %}<div class="invalid-feedback d-block">{{ errors.get('exclude_amazon_in_stock') }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-card form-section mb-4">
+    <div class="app-card-header">CSV出力設定</div>
+    <div class="app-card-body">
+      <label for="csv_export_dir" class="form-label">CSV出力先</label>
+      <input type="text" class="form-control{% if errors.get('csv_export_dir') %} is-invalid{% endif %}" id="csv_export_dir" name="csv_export_dir" value="{{ settings.get('csv_export_dir', '') or '' }}">
+      {% if errors.get('csv_export_dir') %}<div class="invalid-feedback d-block">{{ errors.get('csv_export_dir') }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="action-bar">
+    <button type="submit" class="btn btn-primary">設定を保存</button>
+  </div>
+</form>
+{% endblock %}

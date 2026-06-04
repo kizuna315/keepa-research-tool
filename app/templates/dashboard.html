@@ -1,0 +1,291 @@
+﻿{% extends "base.html" %}
+
+{% block title %}ダッシュボード | Keepa Research Tool{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Keepa Research Tool ダッシュボード</h1>
+    <p class="page-subtitle">リサーチ状況と候補商品の概要を確認できます。</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-primary" href="{{ url_for('research.new_research') }}">新規リサーチ</a>
+    <a class="btn btn-outline-primary" href="{{ url_for('products.list_products') }}">商品一覧</a>
+    <a class="btn btn-outline-secondary" href="{{ url_for('settings.settings_form') }}">設定</a>
+  </div>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-card stat-card-primary">
+    <div class="stat-label">総取得商品数</div>
+    <div class="stat-value">{{ stats.total_products }}</div>
+    <div class="stat-hint">保存済みの商品総数</div>
+  </div>
+  <div class="stat-card stat-card-success">
+    <div class="stat-label">候補商品数</div>
+    <div class="stat-value">{{ stats.candidate_products }}</div>
+    <div class="stat-hint">確認したい有力候補</div>
+  </div>
+  <div class="stat-card stat-card-warning">
+    <div class="stat-label">保留商品数</div>
+    <div class="stat-value">{{ stats.hold_products }}</div>
+    <div class="stat-hint">追加確認が必要な商品</div>
+  </div>
+  <div class="stat-card stat-card-danger">
+    <div class="stat-label">除外商品数</div>
+    <div class="stat-value">{{ stats.excluded_products }}</div>
+    <div class="stat-hint">候補から外した商品</div>
+  </div>
+  <div class="stat-card stat-card-muted">
+    <div class="stat-label">未確認商品数</div>
+    <div class="stat-value">{{ stats.unreviewed_products }}</div>
+    <div class="stat-hint">まだ手動確認していない商品</div>
+  </div>
+  <div class="stat-card stat-card-info">
+    <div class="stat-label">仕入れ先検索待ち商品数</div>
+    <div class="stat-value">{{ stats.supplier_search_pending_products }}</div>
+    <div class="stat-hint">ステータス分類のみ</div>
+  </div>
+  <div class="stat-card stat-card-primary">
+    <div class="stat-label">本日取得件数</div>
+    <div class="stat-value">{{ stats.today_products }}</div>
+    <div class="stat-hint">今日DBに追加された商品</div>
+  </div>
+  <div class="stat-card stat-card-danger">
+    <div class="stat-label">エラー件数</div>
+    <div class="stat-value">{{ stats.failed_research_runs }}</div>
+    <div class="stat-hint">failed のリサーチ履歴</div>
+  </div>
+</div>
+
+<div class="card mt-4 token-card">
+  <div class="card-header">Keepa APIトークン</div>
+  <div class="card-body">
+    {% set token_status = stats.keepa_token_status %}
+    {% set token_status_class = "secondary" %}
+    {% if token_status == "available" %}
+      {% set token_status_class = "success" %}
+    {% elif token_status == "depleted" %}
+      {% set token_status_class = "danger" %}
+    {% elif stats.keepa_token_error == "Keepa APIトークンが不足しています。" %}
+      {% set token_status_class = "danger" %}
+    {% endif %}
+
+    <div class="token-status-row">
+      <div>
+        <div class="token-label">トークン状態</div>
+        <span class="badge badge-soft bg-{{ token_status_class }}">{{ token_status }}</span>
+      </div>
+      <div>
+        <div class="token-label">現在使えるトークン</div>
+        <div class="token-value">{{ stats.keepa_tokens_available if stats.keepa_tokens_available is not none else "-" }}</div>
+      </div>
+      <div>
+        <div class="token-label">回復レート</div>
+        <div class="token-value">{{ stats.keepa_refill_rate if stats.keepa_refill_rate is not none else "-" }}</div>
+      </div>
+      <div>
+        <div class="token-label">次回回復まで</div>
+        <div class="token-value">{{ stats.keepa_refill_display or "不明" }}</div>
+        {% if stats.keepa_refill_seconds is not none %}
+          <div class="token-help">あと {{ stats.keepa_refill_seconds }} 秒</div>
+        {% endif %}
+      </div>
+      <div>
+        <div class="token-label">キーワード検索の目安</div>
+        <div class="token-value small">{{ stats.keyword_limit_recommendation }}</div>
+      </div>
+    </div>
+
+    {% if stats.keepa_token_error %}
+      <div class="alert alert-warning mt-3 mb-0" role="alert">
+        {{ stats.keepa_token_error }}
+        {% if stats.keepa_token_error == "Keepa API Keyが未設定です。" %}
+          <a href="{{ url_for('settings.settings_form') }}" class="alert-link">設定画面へ</a>
+        {% endif %}
+      </div>
+    {% elif stats.keepa_tokens_left is not none and stats.keepa_tokens_left <= 0 %}
+      <div class="token-warning mt-3">
+        トークンが不足しています。{{ stats.keepa_refill_display }}後に一部回復します。
+      </div>
+    {% else %}
+      <div class="token-help mt-3">
+        現在リサーチを実行できます。大量取得する場合はトークン消費に注意してください。
+        キーワード検索はASIN詳細を再取得するため、ASIN指定より多くのトークンを消費します。
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card mt-4">
+  <div class="card-header">直近リサーチ状況</div>
+  <div class="card-body">
+    {% set latest_status = stats.latest_research_status %}
+    {% set status_class = "secondary" %}
+    {% if latest_status == "completed" %}
+      {% set status_class = "success" %}
+    {% elif latest_status == "failed" %}
+      {% set status_class = "danger" %}
+    {% elif latest_status == "running" %}
+      {% set status_class = "warning text-dark" %}
+    {% elif latest_status == "cancelled" %}
+      {% set status_class = "dark" %}
+    {% endif %}
+
+    <div class="row g-2">
+      <div class="col-12 col-md-6">
+        <strong>直近リサーチ名:</strong>
+        {{ stats.latest_research or "-" }}
+      </div>
+      <div class="col-12 col-md-6">
+        <strong>直近リサーチステータス:</strong>
+        {% if latest_status %}
+          <span class="badge badge-soft bg-{{ status_class }}">{{ latest_status }}</span>
+        {% else %}
+          -
+        {% endif %}
+      </div>
+      <div class="col-12 col-md-6">
+        <strong>直近リサーチ開始日時（JST）:</strong>
+        {{ stats.latest_research_started_at|datetime_jst }}
+      </div>
+      <div class="col-12 col-md-6">
+        <strong>直近リサーチ終了日時（JST）:</strong>
+        {{ stats.latest_research_finished_at|datetime_jst }}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="dashboard-panels">
+  <div class="card table-card">
+    <div class="card-header">直近のリサーチ履歴</div>
+    <div class="card-body">
+      {% if recent_research_runs %}
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0 app-table compact-table">
+          <thead>
+            <tr>
+              <th>リサーチ名</th>
+              <th>ステータス</th>
+              <th>要求件数</th>
+              <th>取得件数</th>
+              <th>保存件数</th>
+              <th>開始日時（JST）</th>
+              <th>終了日時（JST）</th>
+              <th>エラー内容</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for run in recent_research_runs %}
+              <tr data-testid="recent-research-row">
+                <td>{{ run.name or "-" }}</td>
+                <td>
+                  {% set run_status_class = "secondary" %}
+                  {% if run.status == "completed" %}
+                    {% set run_status_class = "success" %}
+                  {% elif run.status == "failed" %}
+                    {% set run_status_class = "danger" %}
+                  {% elif run.status == "running" %}
+                    {% set run_status_class = "warning text-dark" %}
+                  {% endif %}
+                  <span class="badge badge-soft bg-{{ run_status_class }}">{{ run.status }}</span>
+                </td>
+                <td>{{ run.total_requested }}</td>
+                <td>{{ run.total_fetched }}</td>
+                <td>{{ run.total_saved }}</td>
+                <td>{{ run.started_at|datetime_jst }}</td>
+                <td>{{ run.finished_at|datetime_jst }}</td>
+                <td>{% if run.error_message %}{{ run.error_message }}{% else %}-{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="empty-state">
+          <p class="mb-2">まだリサーチ履歴はありません。</p>
+          <a class="btn btn-primary btn-sm" href="{{ url_for('research.new_research') }}">新規リサーチへ</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card table-card">
+    <div class="card-header">最近取得した商品</div>
+    <div class="card-body">
+      {% if recent_products %}
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0 app-table compact-table">
+          <thead>
+            <tr>
+              <th>商品名</th>
+              <th>ASIN</th>
+              <th>ブランド</th>
+              <th>Keepaスコア</th>
+              <th>判定</th>
+              <th>ステータス</th>
+              <th>最終確認日時（JST）</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for product in recent_products %}
+              <tr data-testid="recent-product-row">
+                <td>
+                  <a href="{{ url_for('products.detail_product', product_id=product.id) }}">{{ product.title }}</a>
+                </td>
+                <td>{{ product.asin }}</td>
+                <td>{{ product.brand or "-" }}</td>
+                <td>{{ product.keepa_score if product.keepa_score is not none else "-" }}</td>
+                <td>
+                  {% set judgement_class = "secondary" %}
+                  {% if product.judgement == "good" %}
+                    {% set judgement_class = "success" %}
+                  {% elif product.judgement == "watch" %}
+                    {% set judgement_class = "warning text-dark" %}
+                  {% elif product.judgement == "bad" %}
+                    {% set judgement_class = "danger" %}
+                  {% endif %}
+                  <span class="badge badge-soft bg-{{ judgement_class }}">{{ product.judgement }}</span>
+                </td>
+                <td>
+                  {% set product_status_class = "secondary" %}
+                  {% if product.status == "candidate" %}
+                    {% set product_status_class = "success" %}
+                  {% elif product.status == "hold" %}
+                    {% set product_status_class = "warning text-dark" %}
+                  {% elif product.status == "excluded" %}
+                    {% set product_status_class = "danger" %}
+                  {% elif product.status == "supplier_search_pending" %}
+                    {% set product_status_class = "info text-dark" %}
+                  {% endif %}
+                  <span class="badge badge-soft bg-{{ product_status_class }}">{{ product.status }}</span>
+                </td>
+                <td>{{ product.last_checked_at|datetime_jst }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="empty-state">
+          <p class="mb-2">まだ取得商品はありません。</p>
+          <p class="mb-3">新規リサーチから商品取得を開始してください。</p>
+          <a class="btn btn-primary btn-sm" href="{{ url_for('research.new_research') }}">新規リサーチへ</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="card mt-4">
+  <div class="card-header">クイックリンク</div>
+  <div class="card-body d-flex flex-wrap gap-2">
+    <a class="btn btn-primary" href="{{ url_for('research.new_research') }}">新規リサーチ</a>
+    <a class="btn btn-outline-primary" href="{{ url_for('products.list_products') }}">商品一覧</a>
+    <a class="btn btn-outline-success" href="{{ url_for('products.list_products', status='candidate') }}">候補商品の一覧</a>
+    <a class="btn btn-outline-danger" href="{{ url_for('products.list_products', status='excluded') }}">除外商品の一覧</a>
+    <a class="btn btn-outline-secondary" href="{{ url_for('settings.settings_form') }}">設定</a>
+  </div>
+</div>
+{% endblock %}
