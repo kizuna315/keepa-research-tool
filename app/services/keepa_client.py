@@ -55,6 +55,7 @@ class KeepaClient:
     def __init__(self, settings_service: Any = None, timeout: int = 30):
         self._settings_service = settings_service or SettingsService
         self._timeout = timeout
+        self._last_tokens_left: int | None = None
 
     def _get_api_key(self) -> str:
         api_key = self._settings_service.get(AppSetting.KEY_KEEPA_API_KEY)
@@ -91,11 +92,15 @@ class KeepaClient:
         path: str,
         params: dict | None = None,
         raise_on_empty_tokens: bool = True,
+        log_context: dict | None = None,
     ) -> dict:
         request_params = dict(params or {})
         request_params["key"] = self._get_api_key()
         request_params["domain"] = self._get_domain_id()
         url = f"{self.BASE_URL}{path}"
+        before_tokens = self._last_tokens_left
+        if before_tokens is None and path != "/token":
+            before_tokens = self._read_current_tokens_for_log(request_params)
 
         try:
             response = requests.get(url, params=request_params, timeout=self._timeout)
@@ -110,7 +115,7 @@ class KeepaClient:
             raise KeepaApiError(
                 build_user_friendly_error_message("keepa_connection_failed"),
                 error_type="keepa_connection_failed",
-            ) from exc
+            ) from None
         except RequestException as exc:
             self._log_keepa_error(
                 "Keepa API request failed.",
@@ -122,13 +127,24 @@ class KeepaClient:
             raise KeepaApiError(
                 build_user_friendly_error_message("keepa_connection_failed"),
                 error_type="keepa_connection_failed",
-            ) from exc
+            ) from None
 
         self._raise_for_bad_status(response, path=path, params=request_params)
         payload = self._parse_json(response)
         self._raise_for_api_errors(payload, path=path, params=request_params)
 
         tokens_left = payload.get("tokensLeft")
+        after_tokens = self._optional_token_value(tokens_left)
+        self._log_token_consumption(
+            path=path,
+            params=request_params,
+            before_tokens=before_tokens,
+            after_tokens=after_tokens,
+            log_context=log_context,
+        )
+        if after_tokens is not None:
+            self._last_tokens_left = after_tokens
+
         if tokens_left is not None and raise_on_empty_tokens:
             try:
                 if int(tokens_left) <= 0:
@@ -196,12 +212,20 @@ class KeepaClient:
             "asin": ",".join(cleaned_asins),
             "stats": 90,
         }
+        log_context = {}
         if offers is not None:
-            request_params["offers"] = int(offers)
+            normalized_offers = int(offers)
+            log_context["offers"] = normalized_offers
+            if normalized_offers > 0:
+                request_params["offers"] = normalized_offers
+                log_context["mode"] = "detail"
+            else:
+                log_context["mode"] = "light"
 
-        response = self._request(
+        response = self._request_with_log_context(
             "/product",
             params=request_params,
+            log_context=log_context,
         )
 
         products = response.get("products")
@@ -258,7 +282,11 @@ class KeepaClient:
             params["category"] = str(category_id).strip()
 
         try:
-            response = self._request("/search", params=params)
+            response = self._request_with_log_context(
+                "/search",
+                params=params,
+                log_context={"mode": fetch_mode},
+            )
 
             asin_list = self._extract_search_asins(response)
             if asin_list:
@@ -477,6 +505,15 @@ class KeepaClient:
                 f"Invalid {key} value in Keepa response.",
                 error_type="keepa_api_failed",
             ) from exc
+
+    @staticmethod
+    def _optional_token_value(value) -> int | None:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
     @staticmethod
     def _clean_asins(asins: list[str]) -> list[str]:
@@ -737,3 +774,79 @@ class KeepaClient:
         if not has_app_context():
             return
         log_safe(current_app.logger, "error", message, **context)
+
+    @classmethod
+    def _log_token_consumption(
+        cls,
+        path: str,
+        params: dict,
+        before_tokens: int | None,
+        after_tokens: int | None,
+        log_context: dict | None = None,
+    ) -> None:
+        if not has_app_context() or path == "/token":
+            return
+        log_context = log_context or {}
+        consumed = None
+        if before_tokens is not None and after_tokens is not None:
+            consumed = max(0, before_tokens - after_tokens)
+
+        log_safe(
+            current_app.logger,
+            "info",
+            "Keepa API token consumption",
+            before_tokens=before_tokens,
+            after_tokens=after_tokens,
+            consumed=consumed,
+            endpoint=path,
+            mode=log_context.get("mode") or cls._token_log_mode(path, params),
+            limit=params.get("limit"),
+            offers=log_context.get("offers", params.get("offers")),
+        )
+
+    @staticmethod
+    def _token_log_mode(path: str, params: dict) -> str:
+        if path == "/search":
+            return "keyword_search"
+        if path == "/product":
+            if params.get("offers") == 0:
+                return "light"
+            if params.get("offers") is not None:
+                return "detail"
+            return "product_detail"
+        return path.strip("/") or "unknown"
+
+    def _read_current_tokens_for_log(self, request_params: dict) -> int | None:
+        token_params = {
+            "key": request_params.get("key"),
+            "domain": request_params.get("domain"),
+        }
+        try:
+            response = requests.get(
+                f"{self.BASE_URL}/token",
+                params=token_params,
+                timeout=self._timeout,
+            )
+            if response.status_code >= 400:
+                return None
+            payload = self._parse_json(response)
+        except Exception:
+            return None
+
+        tokens_left = self._optional_token_value(payload.get("tokensLeft"))
+        if tokens_left is not None:
+            self._last_tokens_left = tokens_left
+        return tokens_left
+
+    def _request_with_log_context(
+        self,
+        path: str,
+        params: dict | None = None,
+        log_context: dict | None = None,
+    ) -> dict:
+        try:
+            return self._request(path, params=params, log_context=log_context)
+        except TypeError as exc:
+            if "log_context" not in str(exc):
+                raise
+            return self._request(path, params=params)

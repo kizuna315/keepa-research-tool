@@ -995,6 +995,41 @@ def test_keepa_client_logs_masked_api_key(app, caplog, monkeypatch):
     assert "keepa_api_key" not in caplog.text
 
 
+def test_keepa_client_logs_token_consumption_without_api_key(app, caplog, monkeypatch):
+    secret = "SECRET_KEEPA_KEY_123"
+    client = make_client(
+        {
+            AppSetting.KEY_KEEPA_API_KEY: secret,
+            AppSetting.KEY_DEFAULT_DOMAIN_ID: "5",
+        }
+    )
+
+    def fake_get(url, params, timeout):
+        if url.endswith("/token"):
+            return DummyResponse(status_code=200, payload={"tokensLeft": 100})
+        return DummyResponse(status_code=200, payload={"tokensLeft": 75, "asinList": []})
+
+    monkeypatch.setattr("app.services.keepa_client.requests.get", fake_get)
+
+    with app.app_context(), caplog.at_level("INFO"):
+        client.get_token_status()
+        client._request(
+            "/search",
+            {"term": "water bottle", "type": "product", "limit": 1},
+            log_context={"mode": "light"},
+        )
+
+    assert "Keepa API token consumption" in caplog.text
+    assert "'before_tokens': 100" in caplog.text
+    assert "'after_tokens': 75" in caplog.text
+    assert "'consumed': 25" in caplog.text
+    assert "'endpoint': '/search'" in caplog.text
+    assert "'mode': 'light'" in caplog.text
+    assert "'limit': 1" in caplog.text
+    assert secret not in caplog.text
+    assert "keepa_api_key" not in caplog.text
+
+
 def test_normalize_product_missing_optional_fields_does_not_crash():
     client = make_client({AppSetting.KEY_KEEPA_API_KEY: "secret-key"})
     raw = {
